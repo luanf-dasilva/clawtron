@@ -1,0 +1,77 @@
+---
+- name: Deploy lab tool installer
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    installer_local_path: "../python_scripts/install_lab_tools.py"
+    requirements_local_path: "../python_scripts/requirements.txt"
+    installer_remote_path: "/opt/install_lab_tools.py"
+    requirements_remote_path: "/opt/requirements.txt"
+
+    install_dvwa: false
+    install_openclaw: false
+    install_metatron: false
+    install_all: false
+
+    metatron_repo: ""
+
+  tasks:
+    - name: Print variables
+      ansible.builtin.debug:
+        msg: "Variables: all: {{ install_all }}, dvwa: {{ install_dvwa }}, openclaw: {{ install_openclaw }}, metatron: {{ install_metatron }}, metatron_repo: {{ metatron_repo }}"
+
+    - name: Ensure /opt exists
+      ansible.builtin.file:
+        path: /opt
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Copy installer script to target
+      ansible.builtin.copy:
+        src: "{{ installer_local_path }}"
+        dest: "{{ installer_remote_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Copy requirements file to target
+      ansible.builtin.copy:
+        src: "{{ requirements_local_path }}"
+        dest: "{{ requirements_remote_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Build installer argument list
+      ansible.builtin.set_fact:
+        installer_args: >-
+          {{
+            []
+            + (['--all'] if install_all else [])
+            + (['--dvwa'] if install_dvwa else [])
+            + (['--openclaw'] if install_openclaw else [])
+            + (['--metatron'] if install_metatron else [])
+            + (['--metatron-repo', metatron_repo] if install_metatron and metatron_repo | length > 0 else [])
+          }}
+
+    - name: Print installer args
+      ansible.builtin.debug:
+        msg: "Installer args: {{ installer_args }}"
+
+    - name: Show installer command
+      ansible.builtin.debug:
+        msg: "python3 {{ installer_remote_path }} {{ installer_args | join(' ') }}"
+
+    - name: Run installer
+      ansible.builtin.command:
+        argv: "{{ ['python3', installer_remote_path] + installer_args }}"
+      register: install_result
+      changed_when: true
+
+    - name: Show installer output
+      ansible.builtin.debug:
+        var: install_result.stdout_lines
